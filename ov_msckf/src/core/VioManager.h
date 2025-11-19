@@ -50,6 +50,7 @@ class StateHelper;
 class UpdaterMSCKF;
 class UpdaterSLAM;
 class UpdaterZeroVelocity;
+class UpdaterNonHolonomic;
 class Propagator;
 
 /**
@@ -206,6 +207,9 @@ protected:
   /// Our zero velocity tracker
   std::shared_ptr<UpdaterZeroVelocity> updaterZUPT;
 
+  /// Our non-holonomic constraint updater
+  std::shared_ptr<UpdaterNonHolonomic> updaterNHC;
+
   /// This is the queue of measurement times that have come in since we starting doing initialization
   /// After we initialize, we will want to prop & update to the latest timestamp quickly
   std::vector<double> camera_queue_init;
@@ -228,6 +232,9 @@ protected:
   // If we did a zero velocity update
   bool did_zupt_update = false;
   bool has_moved_since_zupt = false;
+
+  // If we did a non-holonomic constraint update
+  bool did_nhc_update = false;
 
   // Good features that where used in the last update (used in visualization)
   std::vector<Eigen::Vector3d> good_features_MSCKF;

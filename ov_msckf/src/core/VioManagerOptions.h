@@ -94,6 +94,15 @@ struct VioManagerOptions {
   /// If we should only use the zupt at the very beginning static initialization phase
   bool zupt_only_at_beginning = false;
 
+  /// If we should try to use non-holonomic constraint update
+  bool try_nhc = false;
+
+  /// Max velocity we will consider to try to do a non-holonomic constraint (i.e. if above this, don't do nhc)
+  double nhc_max_velocity = 5.0;
+
+  /// Multiplier of our non-holonomic constraint noise (default should be 1.0)
+  double nhc_noise_multiplier = 1.0;
+
   /// If we should record the timing performance to file
   bool record_timing_information = false;
 
@@ -117,6 +126,9 @@ struct VioManagerOptions {
       parser->parse_config("zupt_noise_multiplier", zupt_noise_multiplier);
       parser->parse_config("zupt_max_disparity", zupt_max_disparity);
       parser->parse_config("zupt_only_at_beginning", zupt_only_at_beginning);
+      parser->parse_config("try_nhc", try_nhc);
+      parser->parse_config("nhc_max_velocity", nhc_max_velocity);
+      parser->parse_config("nhc_noise_multiplier", nhc_noise_multiplier);
       parser->parse_config("record_timing_information", record_timing_information);
       parser->parse_config("record_timing_filepath", record_timing_filepath);
     }
@@ -126,6 +138,9 @@ struct VioManagerOptions {
     PRINT_DEBUG("  - zupt_noise_multiplier: %.2f\n", zupt_noise_multiplier);
     PRINT_DEBUG("  - zupt_max_disparity: %.4f\n", zupt_max_disparity);
     PRINT_DEBUG("  - zupt_only_at_beginning?: %d\n", zupt_only_at_beginning);
+    PRINT_DEBUG("  - non_holonomic_constraint: %d\n", try_nhc);
+    PRINT_DEBUG("  - nhc_max_velocity: %.2f\n", nhc_max_velocity);
+    PRINT_DEBUG("  - nhc_noise_multiplier: %.2f\n", nhc_noise_multiplier);
     PRINT_DEBUG("  - record timing?: %d\n", (int)record_timing_information);
     PRINT_DEBUG("  - record timing filepath: %s\n", record_timing_filepath.c_str());
   }
@@ -146,6 +161,9 @@ struct VioManagerOptions {
 
   /// Update options for zero velocity (chi2 multiplier)
   UpdaterOptions zupt_options;
+
+  /// Update options for non-holonomic constraint (chi2 multiplier)
+  UpdaterOptions nhc_options;
 
   /**
    * @brief This function will load print out all noise parameters loaded.
@@ -173,6 +191,7 @@ struct VioManagerOptions {
       slam_options.sigma_pix_sq = std::pow(slam_options.sigma_pix, 2);
       aruco_options.sigma_pix_sq = std::pow(aruco_options.sigma_pix, 2);
       parser->parse_config("zupt_chi2_multipler", zupt_options.chi2_multipler);
+      parser->parse_config("nhc_chi2_multipler", nhc_options.chi2_multipler);
     }
     PRINT_DEBUG("  Updater MSCKF Feats:\n");
     msckf_options.print();
@@ -182,6 +201,8 @@ struct VioManagerOptions {
     aruco_options.print();
     PRINT_DEBUG("  Updater ZUPT:\n");
     zupt_options.print();
+    PRINT_DEBUG("  Updater NHC:\n");
+    nhc_options.print();
   }
 
   // STATE DEFAULTS ==========================

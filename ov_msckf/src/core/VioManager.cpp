@@ -42,6 +42,7 @@
 #include "update/UpdaterMSCKF.h"
 #include "update/UpdaterSLAM.h"
 #include "update/UpdaterZeroVelocity.h"
+#include "update/UpdaterNonHolonomic.h"
 
 using namespace ov_core;
 using namespace ov_type;
@@ -161,6 +162,13 @@ VioManager::VioManager(VioManagerOptions &params_) : thread_init_running(false),
                                                         propagator, params.gravity_mag, params.zupt_max_velocity,
                                                         params.zupt_noise_multiplier, params.zupt_max_disparity);
   }
+
+  // If we are using non-holonomic constraint updates, then create the updater
+  if (params.try_nhc) {
+    updaterNHC = std::make_shared<UpdaterNonHolonomic>(params.nhc_options, params.imu_noises, trackFEATS->get_feature_database(),
+                                                       propagator, params.gravity_mag, params.nhc_max_velocity,
+                                                       params.nhc_noise_multiplier);
+  }
 }
 
 void VioManager::feed_measurement_imu(const ov_core::ImuData &message) {
@@ -186,6 +194,11 @@ void VioManager::feed_measurement_imu(const ov_core::ImuData &message) {
   if (is_initialized_vio && updaterZUPT != nullptr && (!params.zupt_only_at_beginning || !has_moved_since_zupt)) {
     updaterZUPT->feed_imu(message, oldest_time);
   }
+
+  // Push back to the non-holonomic constraint updater if it is enabled
+  if (is_initialized_vio && updaterNHC != nullptr) {
+    updaterNHC->feed_imu(message, oldest_time);
+  }
 }
 
 void VioManager::feed_measurement_simulation(double timestamp, const std::vector<int> &camids,
@@ -208,6 +221,11 @@ void VioManager::feed_measurement_simulation(double timestamp, const std::vector
                                                           propagator, params.gravity_mag, params.zupt_max_velocity,
                                                           params.zupt_noise_multiplier, params.zupt_max_disparity);
     }
+    if (params.try_nhc) {
+      updaterNHC = std::make_shared<UpdaterNonHolonomic>(params.nhc_options, params.imu_noises, trackFEATS->get_feature_database(),
+                                                         propagator, params.gravity_mag, params.nhc_max_velocity,
+                                                         params.nhc_noise_multiplier);
+    }
     PRINT_WARNING(RED "[SIM]: casting our tracker to a TrackSIM object!\n" RESET);
   }
 
@@ -227,6 +245,27 @@ void VioManager::feed_measurement_simulation(double timestamp, const std::vector
       assert(state->_timestamp == timestamp);
       propagator->clean_old_imu_measurements(timestamp + state->_calib_dt_CAMtoIMU->value()(0) - 0.10);
       updaterZUPT->clean_old_imu_measurements(timestamp + state->_calib_dt_CAMtoIMU->value()(0) - 0.10);
+      if (updaterNHC != nullptr) {
+        updaterNHC->clean_old_imu_measurements(timestamp + state->_calib_dt_CAMtoIMU->value()(0) - 0.10);
+      }
+      propagator->invalidate_cache();
+      return;
+    }
+  }
+
+  // Check if we should do non-holonomic constraint update
+  if (is_initialized_vio && updaterNHC != nullptr) {
+    // If the same state time, use the previous timestep decision
+    if (state->_timestamp != timestamp) {
+      did_nhc_update = updaterNHC->try_update(state, timestamp);
+    }
+    if (did_nhc_update) {
+      assert(state->_timestamp == timestamp);
+      propagator->clean_old_imu_measurements(timestamp + state->_calib_dt_CAMtoIMU->value()(0) - 0.10);
+      updaterNHC->clean_old_imu_measurements(timestamp + state->_calib_dt_CAMtoIMU->value()(0) - 0.10);
+      if (updaterZUPT != nullptr) {
+        updaterZUPT->clean_old_imu_measurements(timestamp + state->_calib_dt_CAMtoIMU->value()(0) - 0.10);
+      }
       propagator->invalidate_cache();
       return;
     }
@@ -300,6 +339,27 @@ void VioManager::track_image_and_update(const ov_core::CameraData &message_const
       assert(state->_timestamp == message.timestamp);
       propagator->clean_old_imu_measurements(message.timestamp + state->_calib_dt_CAMtoIMU->value()(0) - 0.10);
       updaterZUPT->clean_old_imu_measurements(message.timestamp + state->_calib_dt_CAMtoIMU->value()(0) - 0.10);
+      if (updaterNHC != nullptr) {
+        updaterNHC->clean_old_imu_measurements(message.timestamp + state->_calib_dt_CAMtoIMU->value()(0) - 0.10);
+      }
+      propagator->invalidate_cache();
+      return;
+    }
+  }
+
+  // Check if we should do non-holonomic constraint update
+  if (is_initialized_vio && updaterNHC != nullptr) {
+    // If the same state time, use the previous timestep decision
+    if (state->_timestamp != message.timestamp) {
+      did_nhc_update = updaterNHC->try_update(state, message.timestamp);
+    }
+    if (did_nhc_update) {
+      assert(state->_timestamp == message.timestamp);
+      propagator->clean_old_imu_measurements(message.timestamp + state->_calib_dt_CAMtoIMU->value()(0) - 0.10);
+      updaterNHC->clean_old_imu_measurements(message.timestamp + state->_calib_dt_CAMtoIMU->value()(0) - 0.10);
+      if (updaterZUPT != nullptr) {
+        updaterZUPT->clean_old_imu_measurements(message.timestamp + state->_calib_dt_CAMtoIMU->value()(0) - 0.10);
+      }
       propagator->invalidate_cache();
       return;
     }
