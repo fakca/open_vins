@@ -1,0 +1,148 @@
+/**
+
+
+@page update-nonholonomic Non-Holonomic Constraint Update
+
+The key idea of the non-holonomic constraint update (NHC) is to leverage kinematic constraints of wheeled vehicles to improve state estimation.
+Wheeled ground vehicles, such as cars, trucks, and differential drive robots, cannot move sideways due to their wheel configuration.
+This kinematic constraint can be exploited to provide additional information to the Visual-Inertial Odometry (VIO) system, particularly in scenarios where visual features are scarce or unreliable.
+
+The non-holonomic constraint is particularly useful for:
+- Ground vehicles with standard wheeled configurations (cars, trucks, etc.)
+- Differential drive robots
+- Scenarios with poor visual conditions (e.g., textureless environments, motion blur)
+- Complementing visual odometry during straight-line motion
+
+
+@section update-nonholonomic-constraint Constraint Formulation
+
+For a typical wheeled vehicle, the non-holonomic constraint states that the vehicle cannot have lateral (sideways) or vertical velocity in its body frame.
+Only forward/backward motion along the longitudinal axis is allowed.
+
+Mathematically, if we transform the velocity from the global frame to the IMU body frame:
+
+\f{align*}{
+    {}^{I}\mathbf{v} &= {}^{I}_G\mathbf{R} \cdot {}^{G}\mathbf{v} 
+\f}
+
+Then the non-holonomic constraint enforces:
+
+\f{align*}{
+    {}^{I}v_y &= 0 \\
+    {}^{I}v_z &= 0
+\f}
+
+where \f${}^{I}v_y\f$ is the lateral (y-axis) velocity and \f${}^{I}v_z\f$ is the vertical (z-axis) velocity in the IMU body frame.
+
+
+@section update-nonholonomic-meas Measurement Model
+
+We formulate this as a measurement update where the "measurement" is zero lateral and vertical velocity.
+The measurement function relates the constraint to the current state:
+
+\f{align*}{
+    \mathbf{z} &= 
+    \begin{bmatrix}
+    {}^{I}v_y \\
+    {}^{I}v_z
+    \end{bmatrix} =
+    \begin{bmatrix}
+    0 \\
+    0
+    \end{bmatrix}
+\f}
+
+The residual is computed as:
+
+\f{align*}{
+    \tilde{\mathbf{z}} &= \mathbf{z} - \mathbf{h}(\mathbf{x}) = 
+    \begin{bmatrix}
+    0 \\
+    0
+    \end{bmatrix} -
+    \begin{bmatrix}
+    \mathbf{e}_2^\top ({}^{I}_G\mathbf{R} \cdot {}^{G}\mathbf{v}) \\
+    \mathbf{e}_3^\top ({}^{I}_G\mathbf{R} \cdot {}^{G}\mathbf{v})
+    \end{bmatrix}
+\f}
+
+where \f$\mathbf{e}_2\f$ and \f$\mathbf{e}_3\f$ are unit vectors along the y and z axes, respectively.
+
+
+@section update-nonholonomic-jacobian Jacobian Derivation
+
+The measurement function depends on both the orientation and velocity in the global frame.
+The Jacobians with respect to these states are:
+
+With respect to orientation:
+\f{align*}{
+    \frac{\partial \tilde{\mathbf{z}}}{\partial {}^{I}_{G}\boldsymbol{\theta}} &= -\left[\begin{array}{c}
+    \mathbf{e}_2^\top \\
+    \mathbf{e}_3^\top
+    \end{array}\right] \left\lfloor {}^{I}_G\mathbf{R} \cdot {}^{G}\mathbf{v} \times\right\rfloor
+\f}
+
+With respect to velocity:
+\f{align*}{
+    \frac{\partial \tilde{\mathbf{z}}}{\partial {}^{G}\mathbf{v}} &= \left[\begin{array}{c}
+    \mathbf{e}_2^\top \\
+    \mathbf{e}_3^\top
+    \end{array}\right] {}^{I}_G\mathbf{R}
+\f}
+
+
+@section update-nonholonomic-noise Measurement Noise
+
+The measurement noise represents uncertainty in the constraint. In practice, there can be small violations due to:
+- Wheel slip on slippery surfaces
+- Slight lateral motion during turns
+- Vehicle suspension dynamics
+- Sensor mounting imperfections
+
+A typical noise value is \f$\sigma_{nhc} = 0.01\f$ m/s (1 cm/s), which can be scaled by the `nhc_noise_multiplier` parameter to tune the constraint strength.
+
+
+@section update-nonholonomic-validation Constraint Validation
+
+Before applying the constraint, we perform several checks:
+
+1. **Velocity magnitude check**: Only apply when velocity is below `nhc_max_velocity` (default 5.0 m/s)
+2. **Chi-squared test**: Validate that the constraint is consistent with current state estimate:
+
+\f{align*}{
+\tilde{\mathbf{z}}^\top(\mathbf{H}\mathbf{P}\mathbf{H}^\top + \mathbf{R})^{-1}\tilde{\mathbf{z}} < \chi^2
+\f}
+
+If the chi-squared test fails, it indicates that the current motion violates the non-holonomic assumption (e.g., vehicle is sliding laterally), and the update is not applied.
+
+
+@section update-nonholonomic-usage Usage and Configuration
+
+The non-holonomic constraint can be enabled in the configuration file with the following parameters:
+
+```yaml
+# non-holonomic constraint update parameters
+# useful for wheeled vehicles that cannot move sideways
+try_nhc: true                  # Enable/disable non-holonomic constraint updates
+nhc_chi2_multipler: 1.0        # Chi-squared test multiplier for validation
+nhc_max_velocity: 5.0          # Maximum velocity (m/s) to apply constraint
+nhc_noise_multiplier: 1.0      # Noise multiplier for constraint uncertainty
+```
+
+**Recommendations:**
+- Enable for wheeled ground vehicles
+- Disable for aerial vehicles or vehicles with omnidirectional capability
+- Increase `nhc_max_velocity` for high-speed applications
+- Increase `nhc_noise_multiplier` if constraint is too aggressive (causing filter divergence)
+- Decrease `nhc_noise_multiplier` for tighter constraint in well-controlled environments
+
+
+@section update-nonholonomic-limitations Limitations
+
+The non-holonomic constraint should NOT be used in the following scenarios:
+- Aerial vehicles (drones, aircraft) that can move in any direction
+- Holonomic robots (e.g., mecanum wheel robots, omnidirectional platforms)
+- Marine vehicles during significant drift or sliding
+- During aggressive maneuvers with significant wheel slip
+
+*/
