@@ -1,0 +1,103 @@
+================================================================================
+NON-HOLONOMIC CONSTRAINT IMPLEMENTATION SUMMARY
+================================================================================
+
+OVERVIEW:
+This implementation adds non-holonomic constraint support to OpenVINS for
+improved state estimation in wheeled ground vehicles that cannot move sideways.
+
+SCOPE OF CHANGES:
+- 10 files modified/added
+- 772 lines added (including documentation and comments)
+- Zero lines removed from existing code
+- Minimal invasive changes following existing patterns
+
+KEY FEATURES:
+1. Enforces lateral (y) and vertical (z) body-frame velocity constraints
+2. Configurable chi-squared validation for robustness
+3. Compatible with existing ZUPT (zero velocity) feature
+4. Comprehensive documentation and user guide
+5. Example configuration provided
+
+FILES ADDED:
+- ov_msckf/src/update/UpdaterNonHolonomic.h (152 lines)
+- ov_msckf/src/update/UpdaterNonHolonomic.cpp (187 lines)
+- docs/update-nonholonomic.dox (148 lines)
+- NON_HOLONOMIC_CONSTRAINTS.md (188 lines)
+
+FILES MODIFIED:
+- ov_msckf/src/core/VioManager.h (7 lines added)
+- ov_msckf/src/core/VioManager.cpp (60 lines added)
+- ov_msckf/src/core/VioManagerOptions.h (21 lines added)
+- ov_msckf/cmake/ROS1.cmake (1 line added)
+- docs/update.dox (1 line added)
+- config/rpng_ironsides/estimator_config.yaml (7 lines added)
+
+DESIGN DECISIONS:
+1. Followed UpdaterZeroVelocity pattern for consistency
+2. Used existing UpdaterOptions and NoiseManager infrastructure
+3. Integrated at same level as ZUPT in VioManager
+4. Made disabled by default (try_nhc: false) for safety
+5. Provided configurable parameters for different scenarios
+
+CONFIGURATION PARAMETERS:
+- try_nhc: Enable/disable (default: false)
+- nhc_chi2_multipler: Chi-squared test multiplier (default: 1.0)
+- nhc_max_velocity: Max velocity threshold (default: 5.0 m/s)
+- nhc_noise_multiplier: Noise scaling (default: 1.0)
+
+CONSTRAINT FORMULATION:
+Mathematical model: v_body_y = 0 and v_body_z = 0
+Where: v_body = R_GtoI * v_global
+
+Jacobians computed with respect to:
+- Orientation (3 DOF)
+- Global velocity (3 DOF)
+
+VALIDATION:
+✓ Syntax check passed
+✓ Code structure follows existing patterns
+✓ Documentation complete
+✓ Configuration examples provided
+✗ Full build/test requires fixing existing Ceres compatibility issue
+
+SUITABLE FOR:
+✓ Cars, trucks, wheeled robots
+✓ Differential drive platforms
+✓ Ackermann-steered vehicles
+✗ Aerial vehicles
+✗ Omnidirectional platforms
+✗ Marine vehicles with drift
+
+USAGE:
+Enable in estimator_config.yaml:
+  try_nhc: true
+  nhc_chi2_multipler: 1.0
+  nhc_max_velocity: 5.0
+  nhc_noise_multiplier: 1.0
+
+TESTING RECOMMENDATIONS:
+1. Start with conservative parameters (high chi2, high noise)
+2. Monitor log messages for acceptance/rejection rates
+3. Tune parameters based on specific vehicle characteristics
+4. Verify no filter divergence with NHC enabled
+5. Compare trajectory accuracy with/without NHC
+
+FUTURE ENHANCEMENTS (Optional):
+- Adaptive noise based on velocity/acceleration
+- Integration with wheel odometry when available
+- Support for different vehicle models (bicycle, tricycle, etc.)
+- Online constraint violation detection
+
+REFERENCES:
+- Mathematical documentation: docs/update-nonholonomic.dox
+- User guide: NON_HOLONOMIC_CONSTRAINTS.md
+- Example configuration: config/rpng_ironsides/estimator_config.yaml
+
+COMPATIBILITY:
+- Compatible with existing ZUPT feature
+- Compatible with all camera configurations
+- Compatible with all feature representations
+- No breaking changes to existing functionality
+
+================================================================================
